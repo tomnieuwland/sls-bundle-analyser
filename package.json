@@ -1,14 +1,22 @@
 {
-	"name": "sls-bundle-analyser",
+	"name": "@tomnieuwland/sls-bundle-analyser",
 	"version": "0.1.0",
-	"description": "Analyze bundle size changes for Serverless Framework Lambda functions.",
+	"description": "Analyze bundle size changes for Typescript/Javascript Serverless Framework Lambda functions using esbuild.",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/tomnieuwland/sls-bundle-analyser.git"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"bin": {
 		"sls-bundle-analyser": "./dist/cli.js"
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"files": [
-		"dist"
+		"dist",
+		"!dist/__tests__"
 	],
 	"scripts": {
 		"build": "tsc",
@@ -36,5 +44,10 @@
 	"license": "MIT",
 	"engines": {
 		"node": ">=20"
+	},
+	"release": {
+		"branches": [
+			"main"
+		]
 	}
 }
