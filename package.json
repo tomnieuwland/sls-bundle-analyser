@@ -1,0 +1,40 @@
+{
+	"name": "sls-bundle-analyser",
+	"version": "0.1.0",
+	"description": "Analyze bundle size changes for Serverless Framework Lambda functions.",
+	"bin": {
+		"sls-bundle-analyser": "./dist/cli.js"
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsc",
+		"typecheck": "tsc --noEmit",
+		"biome": "npx @biomejs/biome check",
+		"biome:fix": "npx @biomejs/biome check --write",
+		"cspell": "cspell lint .",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"prepare": "husky"
+	},
+	"dependencies": {
+		"commander": "^14.0.3",
+		"cspell": "^9.7.0",
+		"esbuild": "0.27.1",
+		"esbuild-visualizer": "0.7.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.4.8",
+		"@types/node": "20.19.23",
+		"husky": "^9.1.7",
+		"typescript": "5.9.3",
+		"vitest": "^4.1.0"
+	},
+	"license": "MIT",
+	"engines": {
+		"node": ">=20"
+	}
+}
