@@ -2,6 +2,8 @@
 
 CLI tool for analysing Lambda bundle sizes in Serverless Framework projects. It parses `serverless*.yml` files to discover handler entry points, bundles them with esbuild, and reports on size changes between branches.
 
+To get started, run `npx @tomnieuwland/sls-bundle-analyser sizes` in the root of your project.
+
 ## Commands
 
 ### `sls-bundle-analyser compare`
