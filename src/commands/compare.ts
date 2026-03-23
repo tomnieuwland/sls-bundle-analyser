@@ -37,7 +37,20 @@ export async function compareAction(opts: CompareOpts): Promise<void> {
 	const parseResult = parseServerlessHandlers(cwd, config.exclude)
 
 	if (parseResult.entries.size === 0) {
-		console.log("No serverless handler entry points found.")
+		if (json) {
+			console.log(
+				formatJsonReport({
+					directory: cwd,
+					changedFiles: 0,
+					affectedFunctions: 0,
+					totalFunctions: 0,
+					functions: [],
+					topGrowingModules: [],
+				}),
+			)
+		} else {
+			console.log("No serverless handler entry points found.")
+		}
 		return
 	}
 
@@ -85,7 +98,20 @@ export async function compareAction(opts: CompareOpts): Promise<void> {
 	}
 
 	if (affectedEntryPoints.size === 0) {
-		console.log("No affected functions — bundle sizes unchanged.")
+		if (json) {
+			console.log(
+				formatJsonReport({
+					directory: cwd,
+					changedFiles: relevantChangedFiles.length,
+					affectedFunctions: 0,
+					totalFunctions: parseResult.totalFunctions,
+					functions: [],
+					topGrowingModules: [],
+				}),
+			)
+		} else {
+			console.log("No affected functions — bundle sizes unchanged.")
+		}
 		return
 	}
 

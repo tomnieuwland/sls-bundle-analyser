@@ -59,7 +59,11 @@ export async function sizesAction(opts: SizesOpts): Promise<void> {
 	const parseResult = parseServerlessHandlers(cwd, config.exclude)
 
 	if (parseResult.entries.size === 0) {
-		console.log("No serverless handler entry points found.")
+		if (opts.json) {
+			console.log(JSON.stringify({ functions: [] }, null, 2))
+		} else {
+			console.log("No serverless handler entry points found.")
+		}
 		return
 	}
 

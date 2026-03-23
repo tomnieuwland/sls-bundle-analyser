@@ -21,7 +21,11 @@ export async function sharedModulesAction(
 	const parseResult = parseServerlessHandlers(cwd, config.exclude)
 
 	if (parseResult.entries.size === 0) {
-		console.log("No serverless handler entry points found.")
+		if (opts.json) {
+			console.log(JSON.stringify({ totalEntryPoints: 0, modules: [] }, null, 2))
+		} else {
+			console.log("No serverless handler entry points found.")
+		}
 		return
 	}
 
