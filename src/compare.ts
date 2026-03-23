@@ -149,6 +149,31 @@ export async function compareBundles(
 }
 
 /**
+ * Resolve a branch name to a valid git ref.
+ * In CI environments (e.g. GitHub Actions), the local branch may not exist
+ * due to shallow/single-branch clones. Falls back to origin/<branch>.
+ */
+function resolveRef(branch: string, repoRoot: string): string {
+	try {
+		execSync(`git rev-parse --verify "${branch}"`, {
+			cwd: repoRoot,
+			encoding: "utf-8",
+			stdio: "pipe",
+		})
+		return branch
+	} catch {
+		// Local ref doesn't exist, try remote
+		const remote = `origin/${branch}`
+		execSync(`git rev-parse --verify "${remote}"`, {
+			cwd: repoRoot,
+			encoding: "utf-8",
+			stdio: "pipe",
+		})
+		return remote
+	}
+}
+
+/**
  * Run a function against a git worktree checked out at the given branch.
  *
  * Creates a temporary worktree, symlinks node_modules, calls `fn` with the
@@ -164,7 +189,8 @@ export async function withWorktree<T>(
 	const worktreePath = join(tmpdir(), `sls-bundle-analyser-${Date.now()}`)
 
 	try {
-		execSync(`git worktree add "${worktreePath}" "${branch}" --detach`, {
+		const ref = resolveRef(branch, repoRoot)
+		execSync(`git worktree add "${worktreePath}" "${ref}" --detach`, {
 			cwd: repoRoot,
 			encoding: "utf-8",
 			stdio: "pipe",
