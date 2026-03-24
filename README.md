@@ -18,6 +18,7 @@ Compares bundle sizes between the current branch and a base branch. Builds a dep
 | `--json`               | Output raw JSON instead of a text table                                         |
 | `--threshold <bytes>`  | Only show functions with delta above this threshold                             |
 | `--fail-above <bytes>` | Exit with code 1 if any function grew more than this many bytes (useful for CI) |
+| `--include-zero-delta` | Include functions whose total bundle size did not change                         |
 
 ### `sls-bundle-analyser sizes`
 

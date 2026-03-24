@@ -38,6 +38,7 @@ export function buildReportData(
 	changedFileCount: number,
 	totalFunctions: number,
 	cwd: string,
+	includeZeroDelta = false,
 ): ReportData {
 	const functions: FunctionDelta[] = []
 
@@ -76,29 +77,37 @@ export function buildReportData(
 		}
 	}
 
+	// Filter out zero-delta functions unless explicitly requested
+	const filtered = includeZeroDelta
+		? functions
+		: functions.filter((f) => f.deltaBytes !== 0)
+
 	// Sort by absolute delta descending
-	functions.sort((a, b) => Math.abs(b.deltaBytes) - Math.abs(a.deltaBytes))
+	filtered.sort((a, b) => Math.abs(b.deltaBytes) - Math.abs(a.deltaBytes))
 
 	// Compute top growing modules across all functions
-	const moduleDeltas = computeModuleDeltas(comparison)
+	const moduleDeltas = computeModuleDeltas(comparison, includeZeroDelta)
 
 	return {
 		directory: relative(process.cwd(), cwd) || ".",
 		changedFiles: changedFileCount,
-		affectedFunctions: functions.length,
+		affectedFunctions: filtered.length,
 		totalFunctions,
-		functions,
+		functions: filtered,
 		topGrowingModules: moduleDeltas,
 	}
 }
 
 export function computeModuleDeltas(
 	comparison: ComparisonResult,
+	includeZeroDelta = false,
 ): ModuleDelta[] {
 	const moduleMap = new Map<string, { totalDelta: number; count: number }>()
 
 	for (const [ep, currentSize] of comparison.current) {
 		const baseSize = comparison.base.get(ep)
+		const totalDelta = currentSize.bytes - (baseSize?.bytes ?? 0)
+		if (totalDelta === 0 && !includeZeroDelta) continue
 		const baseModules = baseSize?.modules ?? new Map<string, number>()
 
 		for (const [mod, currentBytes] of currentSize.modules) {

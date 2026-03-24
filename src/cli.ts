@@ -28,6 +28,10 @@ program
 		"--fail-above <bytes>",
 		"exit with code 1 if any function grew more than this many bytes",
 	)
+	.option(
+		"--include-zero-delta",
+		"include functions whose total bundle size did not change",
+	)
 	.action(compareAction)
 
 program

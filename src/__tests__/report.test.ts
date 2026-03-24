@@ -81,6 +81,45 @@ describe("buildReportData", () => {
 		expect(data.functions[0].deltaPercent).toBe(-100)
 	})
 
+	it("excludes zero-delta functions by default", () => {
+		const comparison: ComparisonResult = {
+			current: new Map([
+				["src/changed.ts", { bytes: 1200, modules: new Map() }],
+				["src/unchanged.ts", { bytes: 500, modules: new Map() }],
+			]),
+			base: new Map([
+				["src/changed.ts", { bytes: 1000, modules: new Map() }],
+				["src/unchanged.ts", { bytes: 500, modules: new Map() }],
+			]),
+			newEntryPoints: new Set(),
+			removedEntryPoints: new Set(),
+		}
+
+		const data = buildReportData(comparison, 1, 5, process.cwd())
+		expect(data.functions).toHaveLength(1)
+		expect(data.functions[0].entryPoint).toBe("src/changed.ts")
+		expect(data.affectedFunctions).toBe(1)
+	})
+
+	it("includes zero-delta functions when includeZeroDelta is true", () => {
+		const comparison: ComparisonResult = {
+			current: new Map([
+				["src/changed.ts", { bytes: 1200, modules: new Map() }],
+				["src/unchanged.ts", { bytes: 500, modules: new Map() }],
+			]),
+			base: new Map([
+				["src/changed.ts", { bytes: 1000, modules: new Map() }],
+				["src/unchanged.ts", { bytes: 500, modules: new Map() }],
+			]),
+			newEntryPoints: new Set(),
+			removedEntryPoints: new Set(),
+		}
+
+		const data = buildReportData(comparison, 1, 5, process.cwd(), true)
+		expect(data.functions).toHaveLength(2)
+		expect(data.affectedFunctions).toBe(2)
+	})
+
 	it("sorts by absolute delta descending", () => {
 		const comparison: ComparisonResult = {
 			current: new Map([
@@ -153,6 +192,77 @@ describe("computeModuleDeltas", () => {
 		expect(lodash).toBeDefined()
 		expect(lodash?.deltaBytes).toBe(200) // +100 from a, +100 from b
 		expect(lodash?.affectedFunctions).toBe(2)
+	})
+
+	it("skips entry points with zero total delta by default", () => {
+		const comparison: ComparisonResult = {
+			current: new Map([
+				[
+					"src/unchanged.ts",
+					{
+						bytes: 1000,
+						modules: new Map([
+							["node_modules/lodash/index.js", 600],
+							["src/unchanged.ts", 400],
+						]),
+					},
+				],
+			]),
+			base: new Map([
+				[
+					"src/unchanged.ts",
+					{
+						bytes: 1000,
+						modules: new Map([
+							["node_modules/lodash/index.js", 500],
+							["src/unchanged.ts", 500],
+						]),
+					},
+				],
+			]),
+			newEntryPoints: new Set(),
+			removedEntryPoints: new Set(),
+		}
+
+		expect(computeModuleDeltas(comparison)).toEqual([])
+	})
+
+	it("includes entry points with zero total delta when includeZeroDelta is true", () => {
+		const comparison: ComparisonResult = {
+			current: new Map([
+				[
+					"src/unchanged.ts",
+					{
+						bytes: 1000,
+						modules: new Map([
+							["node_modules/lodash/index.js", 600],
+							["src/unchanged.ts", 400],
+						]),
+					},
+				],
+			]),
+			base: new Map([
+				[
+					"src/unchanged.ts",
+					{
+						bytes: 1000,
+						modules: new Map([
+							["node_modules/lodash/index.js", 500],
+							["src/unchanged.ts", 500],
+						]),
+					},
+				],
+			]),
+			newEntryPoints: new Set(),
+			removedEntryPoints: new Set(),
+		}
+
+		const deltas = computeModuleDeltas(comparison, true)
+		expect(deltas).toHaveLength(2)
+		const lodash = deltas.find(
+			(d) => d.module === "node_modules/lodash/index.js",
+		)
+		expect(lodash?.deltaBytes).toBe(100)
 	})
 
 	it("excludes modules with zero delta", () => {

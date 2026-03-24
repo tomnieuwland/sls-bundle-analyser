@@ -20,6 +20,7 @@ export interface CompareOpts {
 	json?: boolean
 	threshold: string
 	failAbove?: string
+	includeZeroDelta?: boolean
 }
 
 export async function compareAction(opts: CompareOpts): Promise<void> {
@@ -123,11 +124,13 @@ export async function compareAction(opts: CompareOpts): Promise<void> {
 	const comparison = await compareBundles(affectedEntryPoints, config, cwd)
 
 	// Step 5: Report
+	const includeZeroDelta = opts.includeZeroDelta === true
 	const reportData = buildReportData(
 		comparison,
 		relevantChangedFiles.length,
 		parseResult.totalFunctions,
 		cwd,
+		includeZeroDelta,
 	)
 
 	const reportOptions: ReportOptions = {
