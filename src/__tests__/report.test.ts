@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { ComparisonResult } from "../compare.js"
-import { buildReportData, computeModuleDeltas, formatBytes } from "../report.js"
+import { buildReportData, formatBytes } from "../report.js"
 
 describe("formatBytes", () => {
 	it("formats bytes", () => {
@@ -138,84 +138,144 @@ describe("buildReportData", () => {
 		expect(data.functions[0].entryPoint).toBe("src/big.ts")
 		expect(data.functions[1].entryPoint).toBe("src/small.ts")
 	})
-})
 
-describe("computeModuleDeltas", () => {
-	it("aggregates module changes across functions", () => {
+	it("computes per-function module deltas with growth and shrinkage", () => {
 		const comparison: ComparisonResult = {
 			current: new Map([
 				[
-					"src/a.ts",
+					"src/handler.ts",
 					{
-						bytes: 1000,
+						bytes: 1500,
 						modules: new Map([
-							["node_modules/lodash/index.js", 500],
-							["src/a.ts", 500],
+							["src/handler.ts", 200],
+							["node_modules/lodash/index.js", 800],
+							["src/utils.ts", 500],
 						]),
-					},
-				],
-				[
-					"src/b.ts",
-					{
-						bytes: 1000,
-						modules: new Map([["node_modules/lodash/index.js", 600]]),
 					},
 				],
 			]),
 			base: new Map([
 				[
-					"src/a.ts",
+					"src/handler.ts",
+					{
+						bytes: 1000,
+						modules: new Map([
+							["src/handler.ts", 200],
+							["node_modules/lodash/index.js", 600],
+							["src/old-util.ts", 200],
+						]),
+					},
+				],
+			]),
+			newEntryPoints: new Set(),
+			removedEntryPoints: new Set(),
+		}
+
+		const data = buildReportData(comparison, 1, 5, process.cwd())
+		const fn = data.functions[0]
+		expect(fn.moduleDeltas).toHaveLength(3)
+
+		// Sorted by absolute delta descending
+		// src/utils.ts: +500 (new module), lodash: +200, src/old-util.ts: -200
+		expect(fn.moduleDeltas[0]).toEqual({
+			module: "src/utils.ts",
+			currentBytes: 500,
+			baseBytes: 0,
+			deltaBytes: 500,
+		})
+		expect(fn.moduleDeltas[1].module).toBe("node_modules/lodash/index.js")
+		expect(fn.moduleDeltas[1].deltaBytes).toBe(200)
+
+		// src/old-util.ts was removed
+		const removed = fn.moduleDeltas.find((m) => m.module === "src/old-util.ts")
+		expect(removed).toEqual({
+			module: "src/old-util.ts",
+			currentBytes: 0,
+			baseBytes: 200,
+			deltaBytes: -200,
+		})
+	})
+
+	it("includes all modules with baseBytes 0 for new functions", () => {
+		const comparison: ComparisonResult = {
+			current: new Map([
+				[
+					"src/new.ts",
+					{
+						bytes: 1000,
+						modules: new Map([
+							["src/new.ts", 300],
+							["src/dep.ts", 700],
+						]),
+					},
+				],
+			]),
+			base: new Map(),
+			newEntryPoints: new Set(["src/new.ts"]),
+			removedEntryPoints: new Set(),
+		}
+
+		const data = buildReportData(comparison, 1, 5, process.cwd())
+		const fn = data.functions[0]
+		expect(fn.isNew).toBe(true)
+		expect(fn.moduleDeltas).toHaveLength(2)
+		for (const mod of fn.moduleDeltas) {
+			expect(mod.baseBytes).toBe(0)
+			expect(mod.deltaBytes).toBe(mod.currentBytes)
+		}
+	})
+
+	it("includes all modules with currentBytes 0 for removed functions", () => {
+		const comparison: ComparisonResult = {
+			current: new Map(),
+			base: new Map([
+				[
+					"src/old.ts",
 					{
 						bytes: 800,
 						modules: new Map([
-							["node_modules/lodash/index.js", 400],
-							["src/a.ts", 400],
+							["src/old.ts", 300],
+							["src/dep.ts", 500],
 						]),
-					},
-				],
-				[
-					"src/b.ts",
-					{
-						bytes: 900,
-						modules: new Map([["node_modules/lodash/index.js", 500]]),
 					},
 				],
 			]),
 			newEntryPoints: new Set(),
-			removedEntryPoints: new Set(),
+			removedEntryPoints: new Set(["src/old.ts"]),
 		}
 
-		const deltas = computeModuleDeltas(comparison)
-		const lodash = deltas.find(
-			(d) => d.module === "node_modules/lodash/index.js",
-		)
-		expect(lodash).toBeDefined()
-		expect(lodash?.deltaBytes).toBe(200) // +100 from a, +100 from b
-		expect(lodash?.affectedFunctions).toBe(2)
+		const data = buildReportData(comparison, 1, 5, process.cwd())
+		const fn = data.functions[0]
+		expect(fn.isRemoved).toBe(true)
+		expect(fn.moduleDeltas).toHaveLength(2)
+		for (const mod of fn.moduleDeltas) {
+			expect(mod.currentBytes).toBe(0)
+			expect(mod.deltaBytes).toBe(-mod.baseBytes)
+		}
 	})
 
-	it("skips entry points with zero total delta by default", () => {
+	it("has empty moduleDeltas when no modules changed", () => {
 		const comparison: ComparisonResult = {
 			current: new Map([
 				[
-					"src/unchanged.ts",
+					"src/a.ts",
 					{
-						bytes: 1000,
+						bytes: 1200,
 						modules: new Map([
-							["node_modules/lodash/index.js", 600],
-							["src/unchanged.ts", 400],
+							["src/a.ts", 500],
+							["src/shared.ts", 700],
 						]),
 					},
 				],
 			]),
 			base: new Map([
 				[
-					"src/unchanged.ts",
+					"src/a.ts",
 					{
 						bytes: 1000,
 						modules: new Map([
-							["node_modules/lodash/index.js", 500],
-							["src/unchanged.ts", 500],
+							["src/a.ts", 500],
+							["src/shared.ts", 700],
 						]),
 					},
 				],
@@ -224,77 +284,9 @@ describe("computeModuleDeltas", () => {
 			removedEntryPoints: new Set(),
 		}
 
-		expect(computeModuleDeltas(comparison)).toEqual([])
-	})
-
-	it("includes entry points with zero total delta when includeZeroDelta is true", () => {
-		const comparison: ComparisonResult = {
-			current: new Map([
-				[
-					"src/unchanged.ts",
-					{
-						bytes: 1000,
-						modules: new Map([
-							["node_modules/lodash/index.js", 600],
-							["src/unchanged.ts", 400],
-						]),
-					},
-				],
-			]),
-			base: new Map([
-				[
-					"src/unchanged.ts",
-					{
-						bytes: 1000,
-						modules: new Map([
-							["node_modules/lodash/index.js", 500],
-							["src/unchanged.ts", 500],
-						]),
-					},
-				],
-			]),
-			newEntryPoints: new Set(),
-			removedEntryPoints: new Set(),
-		}
-
-		const deltas = computeModuleDeltas(comparison, true)
-		expect(deltas).toHaveLength(2)
-		const lodash = deltas.find(
-			(d) => d.module === "node_modules/lodash/index.js",
-		)
-		expect(lodash?.deltaBytes).toBe(100)
-	})
-
-	it("excludes modules with zero delta", () => {
-		const comparison: ComparisonResult = {
-			current: new Map([
-				["src/a.ts", { bytes: 500, modules: new Map([["src/a.ts", 500]]) }],
-			]),
-			base: new Map([
-				["src/a.ts", { bytes: 500, modules: new Map([["src/a.ts", 500]]) }],
-			]),
-			newEntryPoints: new Set(),
-			removedEntryPoints: new Set(),
-		}
-
-		expect(computeModuleDeltas(comparison)).toEqual([])
-	})
-
-	it("limits to top 10", () => {
-		const modules = new Map<string, number>()
-		const baseModules = new Map<string, number>()
-		for (let i = 0; i < 15; i++) {
-			modules.set(`mod${i}`, 100 + i)
-			baseModules.set(`mod${i}`, 50)
-		}
-
-		const comparison: ComparisonResult = {
-			current: new Map([["src/a.ts", { bytes: 2000, modules }]]),
-			base: new Map([["src/a.ts", { bytes: 1000, modules: baseModules }]]),
-			newEntryPoints: new Set(),
-			removedEntryPoints: new Set(),
-		}
-
-		expect(computeModuleDeltas(comparison)).toHaveLength(10)
+		// Function has a delta (1200 - 1000 = 200) but individual module sizes didn't change
+		// This can happen when esbuild reports different total bytes but same per-module breakdown
+		const data = buildReportData(comparison, 1, 5, process.cwd())
+		expect(data.functions[0].moduleDeltas).toEqual([])
 	})
 })

@@ -1,6 +1,6 @@
 {
 	"name": "@tomnieuwland/sls-bundle-analyser",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Analyze bundle size changes for Typescript/Javascript Serverless Framework Lambda functions using esbuild.",
 	"repository": {
 		"type": "git",

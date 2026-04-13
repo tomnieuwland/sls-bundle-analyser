@@ -46,7 +46,6 @@ export async function compareAction(opts: CompareOpts): Promise<void> {
 					affectedFunctions: 0,
 					totalFunctions: 0,
 					functions: [],
-					topGrowingModules: [],
 				}),
 			)
 		} else {
@@ -107,7 +106,6 @@ export async function compareAction(opts: CompareOpts): Promise<void> {
 					affectedFunctions: 0,
 					totalFunctions: parseResult.totalFunctions,
 					functions: [],
-					topGrowingModules: [],
 				}),
 			)
 		} else {

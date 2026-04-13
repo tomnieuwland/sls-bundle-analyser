@@ -8,6 +8,13 @@ export interface ReportOptions {
 	cwd: string
 }
 
+interface FunctionModuleDelta {
+	module: string
+	currentBytes: number
+	baseBytes: number
+	deltaBytes: number
+}
+
 interface FunctionDelta {
 	entryPoint: string
 	currentBytes: number
@@ -16,12 +23,7 @@ interface FunctionDelta {
 	deltaPercent: number
 	isNew: boolean
 	isRemoved: boolean
-}
-
-interface ModuleDelta {
-	module: string
-	deltaBytes: number
-	affectedFunctions: number
+	moduleDeltas: FunctionModuleDelta[]
 }
 
 export interface ReportData {
@@ -30,7 +32,6 @@ export interface ReportData {
 	affectedFunctions: number
 	totalFunctions: number
 	functions: FunctionDelta[]
-	topGrowingModules: ModuleDelta[]
 }
 
 export function buildReportData(
@@ -49,6 +50,11 @@ export function buildReportData(
 		const baseBytes = baseSize?.bytes ?? 0
 		const deltaBytes = currentSize.bytes - baseBytes
 		const deltaPercent = baseBytes > 0 ? (deltaBytes / baseBytes) * 100 : 0
+		const baseModules = baseSize?.modules ?? new Map<string, number>()
+		const moduleDeltas = computeFunctionModuleDeltas(
+			currentSize.modules,
+			baseModules,
+		)
 
 		functions.push({
 			entryPoint: ep,
@@ -58,6 +64,7 @@ export function buildReportData(
 			deltaPercent,
 			isNew,
 			isRemoved: false,
+			moduleDeltas,
 		})
 	}
 
@@ -65,6 +72,10 @@ export function buildReportData(
 	for (const ep of comparison.removedEntryPoints) {
 		const baseSize = comparison.base.get(ep)
 		if (baseSize) {
+			const moduleDeltas = computeFunctionModuleDeltas(
+				new Map<string, number>(),
+				baseSize.modules,
+			)
 			functions.push({
 				entryPoint: ep,
 				currentBytes: 0,
@@ -73,6 +84,7 @@ export function buildReportData(
 				deltaPercent: -100,
 				isNew: false,
 				isRemoved: true,
+				moduleDeltas,
 			})
 		}
 	}
@@ -85,54 +97,42 @@ export function buildReportData(
 	// Sort by absolute delta descending
 	filtered.sort((a, b) => Math.abs(b.deltaBytes) - Math.abs(a.deltaBytes))
 
-	// Compute top growing modules across all functions
-	const moduleDeltas = computeModuleDeltas(comparison, includeZeroDelta)
-
 	return {
 		directory: relative(process.cwd(), cwd) || ".",
 		changedFiles: changedFileCount,
 		affectedFunctions: filtered.length,
 		totalFunctions,
 		functions: filtered,
-		topGrowingModules: moduleDeltas,
 	}
 }
 
-export function computeModuleDeltas(
-	comparison: ComparisonResult,
-	includeZeroDelta = false,
-): ModuleDelta[] {
-	const moduleMap = new Map<string, { totalDelta: number; count: number }>()
+function computeFunctionModuleDeltas(
+	currentModules: Map<string, number>,
+	baseModules: Map<string, number>,
+): FunctionModuleDelta[] {
+	const deltas: FunctionModuleDelta[] = []
 
-	for (const [ep, currentSize] of comparison.current) {
-		const baseSize = comparison.base.get(ep)
-		const totalDelta = currentSize.bytes - (baseSize?.bytes ?? 0)
-		if (totalDelta === 0 && !includeZeroDelta) continue
-		const baseModules = baseSize?.modules ?? new Map<string, number>()
-
-		for (const [mod, currentBytes] of currentSize.modules) {
-			const baseBytes = baseModules.get(mod) ?? 0
-			const delta = currentBytes - baseBytes
-			if (delta !== 0) {
-				const existing = moduleMap.get(mod)
-				if (existing) {
-					existing.totalDelta += delta
-					existing.count += 1
-				} else {
-					moduleMap.set(mod, { totalDelta: delta, count: 1 })
-				}
-			}
+	for (const [mod, currentBytes] of currentModules) {
+		const baseBytes = baseModules.get(mod) ?? 0
+		const delta = currentBytes - baseBytes
+		if (delta !== 0) {
+			deltas.push({ module: mod, currentBytes, baseBytes, deltaBytes: delta })
 		}
 	}
 
-	return Array.from(moduleMap.entries())
-		.map(([module, { totalDelta, count }]) => ({
-			module,
-			deltaBytes: totalDelta,
-			affectedFunctions: count,
-		}))
-		.sort((a, b) => Math.abs(b.deltaBytes) - Math.abs(a.deltaBytes))
-		.slice(0, 10)
+	// Modules removed (in base but not current)
+	for (const [mod, baseBytes] of baseModules) {
+		if (!currentModules.has(mod)) {
+			deltas.push({
+				module: mod,
+				currentBytes: 0,
+				baseBytes,
+				deltaBytes: -baseBytes,
+			})
+		}
+	}
+
+	return deltas.sort((a, b) => Math.abs(b.deltaBytes) - Math.abs(a.deltaBytes))
 }
 
 const green = (s: string): string => `\x1b[32m${s}\x1b[0m`
@@ -208,17 +208,18 @@ export function formatTextReport(
 		)
 	}
 
-	// Top growing modules
-	if (data.topGrowingModules.length > 0) {
+	// Per-function module deltas
+	for (const fn of filtered) {
+		const topModules = fn.moduleDeltas.slice(0, 5)
+		if (topModules.length === 0) continue
+
 		lines.push("")
-		lines.push(bold("Top changing modules:"))
-		for (const mod of data.topGrowingModules.slice(0, 5)) {
+		lines.push(bold(`  Module deltas for ${fn.entryPoint}:`))
+		for (const mod of topModules) {
 			const sign = mod.deltaBytes > 0 ? "+" : ""
 			const sizeStr = `${sign}${formatBytes(mod.deltaBytes)}`
 			const colouredSize = mod.deltaBytes > 0 ? red(sizeStr) : green(sizeStr)
-			lines.push(
-				`  ${mod.module.padEnd(50)} ${colouredSize} (in ${mod.affectedFunctions} functions)`,
-			)
+			lines.push(`    ${mod.module.padEnd(50)} ${colouredSize}`)
 		}
 	}
 
